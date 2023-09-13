@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Exports Roundcube webmail configuration. See README.txt for details.
  * Copyright (C) 2014 ITEISA DESARROLLO Y SISTEMAS, S.L.
@@ -27,7 +28,8 @@ define('DATABASE_HOST', 'localhost');
 /**
  * Convenience function to construct and format the SQL queries.
  */
-function format($query, $array, $replacements = array()) {
+function format($query, $array, $replacements = array())
+{
   global $mysqli;
 
   $keys = $values = array();
@@ -65,7 +67,7 @@ EOT;
  */
 $mysqli = new mysqli(DATABASE_HOST, $argv[1], $argv[2], ROUNDCUBE_DATABASE);
 if ($mysqli->connect_errno) {
-    die("Error connecting to the database.\n");
+  die("Error connecting to the database.\n");
 }
 $mysqli->query('SET NAMES UTF8');
 
@@ -74,9 +76,9 @@ $mysqli->query('SET NAMES UTF8');
  */
 $results = $mysqli->query('SELECT `value` FROM system WHERE `name` = "roundcube-version"');
 $version = $results->fetch_assoc();
-if ($version['value'] < ROUNDCUBE_VERSION_MIN OR $version['value'] > ROUNDCUBE_VERSION_MAX) {
-  $message = sprintf("This (%s) is not the Roundcube version for which I was designed. See README.txt for details.", $version['value']);
-  die("$message\n");
+if ($version['value'] < ROUNDCUBE_VERSION_MIN or $version['value'] > ROUNDCUBE_VERSION_MAX) {
+  //  $message = sprintf("This (%s) is not the Roundcube version for which I was designed. See README.txt for details.", $version['value']);
+  //  die("$message\n");
 }
 
 /**
@@ -86,7 +88,7 @@ if ($version['value'] < ROUNDCUBE_VERSION_MIN OR $version['value'] > ROUNDCUBE_V
 $data = $queries = array();
 $queries[] = 'SET NAMES UTF8;';
 
-$results = $mysqli->query('SELECT * FROM users WHERE username LIKE "%' . $argv[3] . '"');
+$results = $mysqli->query('SELECT * FROM users'); // WHERE username LIKE "%' . $argv[3] . '"');
 while ($row = $results->fetch_assoc()) {
   $data['users'][] = $row;
 }
@@ -123,24 +125,31 @@ foreach ($data['users'] as $user) {
       }
     }
   }
-
 }
 
 /**
  * Construct the SQL queries to avoid primary key conflicts when importing on the target database.
  */
 foreach ($data['users'] as $user) {
-  
+
   $query = 'INSERT INTO users (%s) VALUES (%s) ON DUPLICATE KEY UPDATE user_id=LAST_INSERT_ID(user_id);';
   $queries[] = format($query, $user, array('user_id' => 'NULL'));
   $queries[] = 'SET @lastUser := LAST_INSERT_ID();';
 
+  // needs to add items into db for signature and such... easiest to remove old and start fresh since it's a new install
+  // $query = 'SELECT @lastUser := user_id FROM users WHERE `username` = \'%s\'';
+  // $queries[] = sprintf($query, $user['username']);
+
   if (!empty($data['identities'][$user['user_id']])) {
     foreach ($data['identities'][$user['user_id']] as $identity) {
       $query = 'INSERT INTO identities (%s) VALUES (%s);';
-      $queries[] = format($query, $identity, array(
-        'identity_id' => 'NULL',
-        'user_id' => '@lastUser')
+      $queries[] = format(
+        $query,
+        $identity,
+        array(
+          'identity_id' => 'NULL',
+          'user_id' => '@lastUser'
+        )
       );
     }
   }
@@ -148,10 +157,14 @@ foreach ($data['users'] as $user) {
   if (!empty($data['contacts'][$user['user_id']])) {
     foreach ($data['contacts'][$user['user_id']] as $contact) {
       $query = 'INSERT INTO contacts (%s) VALUES (%s);';
-      $queries[] = format($query, $contact, array(
-        'contact_id' => 'NULL',
-        'user_id' => '@lastUser',
-        '__md5' => false)
+      $queries[] = format(
+        $query,
+        $contact,
+        array(
+          'contact_id' => 'NULL',
+          'user_id' => '@lastUser',
+          '__md5' => false
+        )
       );
     }
   }
@@ -159,9 +172,13 @@ foreach ($data['users'] as $user) {
   if (!empty($data['contactgroups'][$user['user_id']])) {
     foreach ($data['contactgroups'][$user['user_id']] as $contactgroup) {
       $query = 'INSERT INTO contactgroups (%s) VALUES (%s) ON DUPLICATE KEY UPDATE contactgroup_id=LAST_INSERT_ID(contactgroup_id);';
-      $queries[] = format($query, $contactgroup, array(
-        'contactgroup_id' => 'NULL',
-        'user_id' => '@lastUser')
+      $queries[] = format(
+        $query,
+        $contactgroup,
+        array(
+          'contactgroup_id' => 'NULL',
+          'user_id' => '@lastUser'
+        )
       );
       $queries[] = 'SET @lastGroup := LAST_INSERT_ID();';
 
@@ -175,14 +192,12 @@ foreach ($data['users'] as $user) {
             'contactgroupmember_id' => 'NULL',
             'contactgroup_id' => '@lastGroup',
             'contact_id' => $contact_id,
-          ); 
+          );
           $queries[] = format($query, $contactgroupmember, $replacements);
-
         }
       }
     }
   }
-
 }
 
 
